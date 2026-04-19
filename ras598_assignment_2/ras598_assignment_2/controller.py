@@ -61,7 +61,7 @@ def compute_turn_go_turn_cmd(
         }
 
     if abs(err) > ALIGN_TOL:
-        w = max(-max_w, min(max_w, 2.2 * err))
+        w = max(-max_w, min(max_w, 2.6 * err))
         return {
             'done': False,
             'state': 'rotate',
