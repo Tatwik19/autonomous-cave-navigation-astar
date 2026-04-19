@@ -19,7 +19,8 @@ from ras598_assignment_2.map_utils import (
     is_in_bounds,
     is_occupied,
 )
-from ras598_assignment_2.astar import astar_search, prune_path, has_line_of_sight
+# from ras598_assignment_2.astar import astar_search, prune_path, has_line_of_sight
+from ras598_assignment_2.astar import astar_search, prune_path
 from ras598_assignment_2.visualization import build_marker_array
 from ras598_assignment_2.controller import compute_turn_go_turn_cmd
 
@@ -137,33 +138,6 @@ class PlannerNode(Node):
         for i, (wx, wy) in enumerate(self.pruned_path_world):
             self.get_logger().info(f'  wp[{i}] = ({wx:.2f}, {wy:.2f})')
 
-    def advance_waypoint_if_visible(self):
-        if self.robot_x is None or self.robot_y is None:
-            return
-
-        if self.wp_idx >= len(self.pruned_path_world) - 1:
-            return
-
-        robot_cell = world_to_grid(self.robot_x, self.robot_y, self.map_info)
-        if not is_in_bounds(robot_cell[0], robot_cell[1], self.map_info):
-            return
-
-        best_idx = self.wp_idx
-
-        for i in range(self.wp_idx + 1, len(self.pruned_path_world)):
-            goal_cell = world_to_grid(
-                self.pruned_path_world[i][0],
-                self.pruned_path_world[i][1],
-                self.map_info,
-            )
-
-            if not is_in_bounds(goal_cell[0], goal_cell[1], self.map_info):
-                continue
-
-            if has_line_of_sight(robot_cell, goal_cell, self.map_info):
-                best_idx = i
-
-        self.wp_idx = best_idx
 
     def publish_markers(self):
         if not self.raw_path_world:
@@ -206,11 +180,8 @@ class PlannerNode(Node):
             self.stop_robot()
             return
 
-        self.advance_waypoint_if_visible()
-
         tx, ty = self.pruned_path_world[self.wp_idx]
         is_last_wp = (self.wp_idx == len(self.pruned_path_world) - 1)
-        tol = 0.35 if is_last_wp else 0.25
 
         result = compute_turn_go_turn_cmd(
             robot_x=self.robot_x,
@@ -219,9 +190,9 @@ class PlannerNode(Node):
             target_x=tx,
             target_y=ty,
             prev_state=self.ctrl_state,
-            goal_tol=tol,
-            max_v=0.28,
-            max_w=0.60,
+            goal_tol=0.50 if is_last_wp else 0.40,
+            max_v=0.55,
+            max_w=0.75,
         )
 
         self.ctrl_state = result['state']
@@ -229,7 +200,6 @@ class PlannerNode(Node):
         if result['done']:
             self.get_logger().info(f'Reached wp[{self.wp_idx}] at ({tx:.2f}, {ty:.2f})')
             self.wp_idx += 1
-            self.ctrl_state = None
 
             if self.wp_idx >= len(self.pruned_path_world):
                 self.done = True
@@ -237,6 +207,28 @@ class PlannerNode(Node):
                 if self.latest_energy is not None:
                     self.get_logger().info(f'Final energy: {self.latest_energy:.3f} units')
                 self.stop_robot()
+                return
+
+            tx, ty = self.pruned_path_world[self.wp_idx]
+            next_is_last = (self.wp_idx == len(self.pruned_path_world) - 1)
+
+            result = compute_turn_go_turn_cmd(
+                robot_x=self.robot_x,
+                robot_y=self.robot_y,
+                robot_yaw=self.robot_yaw,
+                target_x=tx,
+                target_y=ty,
+                prev_state='drive',
+                goal_tol=0.50 if next_is_last else 0.40,
+                max_v=0.55,
+                max_w=0.75,
+            )
+
+            self.ctrl_state = result['state']
+            cmd = Twist()
+            cmd.linear.x = result['linear']
+            cmd.angular.z = result['angular']
+            self.cmd_pub.publish(cmd)
             return
 
         cmd = Twist()

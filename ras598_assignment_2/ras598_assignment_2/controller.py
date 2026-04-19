@@ -27,12 +27,12 @@ def compute_turn_go_turn_cmd(
     target_x,
     target_y,
     prev_state=None,
-    goal_tol=0.25,
-    max_v=0.30,
-    max_w=0.60,
+    goal_tol=0.45,
+    max_v=0.55,
+    max_w=1,
 ):
-    ALIGN_TOL = 0.08   # rad
-    DRIFT_LIMIT = 0.18 # rad
+    ALIGN_TOL = 0.02
+    DRIFT_LIMIT = 0.18
 
     dist = compute_distance(robot_x, robot_y, target_x, target_y)
 
@@ -50,7 +50,7 @@ def compute_turn_go_turn_cmd(
     err = normalize_angle(target_heading - robot_yaw)
 
     if prev_state == 'drive' and abs(err) < DRIFT_LIMIT:
-        v = min(max_v, 0.6 * dist)
+        v = min(max_v, 0.9 * dist)
         return {
             'done': False,
             'state': 'drive',
@@ -61,7 +61,7 @@ def compute_turn_go_turn_cmd(
         }
 
     if abs(err) > ALIGN_TOL:
-        w = max(-max_w, min(max_w, 1.5 * err))
+        w = max(-max_w, min(max_w, 2.2 * err))
         return {
             'done': False,
             'state': 'rotate',
@@ -71,7 +71,7 @@ def compute_turn_go_turn_cmd(
             'heading_err': err,
         }
 
-    v = min(max_v, 0.6 * dist)
+    v = min(max_v, 0.9 * dist)
     return {
         'done': False,
         'state': 'drive',
